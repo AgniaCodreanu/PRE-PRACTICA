@@ -7,10 +7,16 @@
 #include <PubSubClient.h>
 //Libraries needed for json file
 #include <ArduinoJson.h>
+#include "CTBot.h"
+#include "Utilities.h" // for int64ToAscii() helper function
+
 
 #define DHTPIN 2     // Digital pin connected to the DHT sensor
 #define DHTTYPE    DHT11     // DHT 11
 DHT dht(DHTPIN, DHTTYPE);
+
+//Initialize Telegram Bot
+String token = "5487523275:AAFt7mL_w1s5LA2oHw5jo8o-OBJ7_UL5WpA"   ; // REPLACE myToken WITH YOUR TELEGRAM BOT TOKEN
 
 const char* ssid = "LANCOMBEIA"; // your network SSID (name)
 const char* password = "beialancom"; // your network password (use for WPA, or use as key for WEP)
@@ -18,6 +24,7 @@ const char* mqtt_server = "mqtt.beia-telemetrie.ro";
 const char* topic = "training/esp8266/AgniaCodreanu"; //don't know where it is used
 
 StaticJsonDocument<512> doc;// Use a StaticJsonDocument to store in the stack (recommended for documents smaller than 1KB)
+CTBot myBot;
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -97,6 +104,19 @@ void setup() {
   setup_wifi();
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
+  Serial.println("Starting TelegramBot...");
+
+  // connect the ESP8266 to the desired access point
+  myBot.wifiConnect(ssid, password);
+
+  // set the telegram bot token
+  myBot.setTelegramToken(token);
+  
+  // check if all things are ok
+  if (myBot.testConnection())
+    Serial.println("\ntestConnection OK");
+  else
+    Serial.println("\ntestConnection NOK");
 }
 void mqtt_pub_sub(float i , char* k)
 {
@@ -118,6 +138,27 @@ void sensor(){
     Serial.println(F("Failed to read from DHT sensor!"));
     return;
   }
+  // a variable to store telegram message data
+  TBMessage msg;
+
+  // if there is an incoming message...
+  if (myBot.getNewMessage(msg)) {
+    Serial.println("\nReceived:");
+    Serial.println(msg.text);
+
+    if(msg.text.equalsIgnoreCase("TEMPERATURE")){
+      float temp=dht.readTemperature();
+      Serial.println(temp);
+      String reply_t=(String)"Temperature: " + (String)temp + (String)" °C";
+      myBot.sendMessage(msg.sender.id, reply_t);      
+    }
+     else if(msg.text.equalsIgnoreCase("HUMIDITY")){
+      float humi=dht.readHumidity();
+      Serial.println(humi);
+      String reply_h=(String)"Humidity: " + (String)humi + (String)" %";
+      myBot.sendMessage(msg.sender.id, reply_h);
+      
+    }
   Serial.println(F("------------------------------------"));
   
   // Print humidity sensor details.
@@ -141,7 +182,7 @@ void sensor(){
   Serial.println();
   delay(500);
   
-}
+}}
 
 void loop() {
 
